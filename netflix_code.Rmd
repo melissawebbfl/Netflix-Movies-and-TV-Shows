@@ -1,0 +1,99 @@
+---
+title: "Netflix Movies and TV Shows"
+output:
+  html_document:
+    df_print: paged
+---
+# Introduction to the data 
+This data set consists of listings of all the movies and TV shows available on Netflix (a video streaming service) as of September 2021.  
+Here is a description of each of the columns in the data set:
+
++ `show_id`: unique ID for every movie / show
++ `type`: identifies if the row represents a movie or show
++ `title`: title of the movie / show
++ `director`: list of directors of the movie / show
++ `cast`: list of actors in the movie / show
++ `country`: countries where the movie / show was produced
++ `date_added`: date the movie / show was added on Netflix
++ `release_year`: year the movie / show was actually released
++ `rating`: MPA rating of the movie / show
++ `duration`: total duration in minutes of movies, or number of seasons for shows
++ `listed_in`: list of genres the movie / show falls under
++ `description`: summary description provided for the movie / show
+
+## Loading and previewing the data
+
+```{r, message = FALSE}
+library(tidyverse)
+library(naniar)
+
+netflix <- read.csv("netflix_titles.csv")
+```
+
+```{r}
+head(netflix, 10)
+
+glimpse(netflix)
+```
+The data set contains 8,807 rows and 12 columns. By previewing the data we can see that there are some missing values that need to be updated. Also we will need to manipulate some of the columns to prepare them for data analysis. For example, the `date_added` variable can be converted from character data to dates. 
+
+
+## Cleaning the data
+### Fixing columns
+```{r}
+# Dropping the description column
+netflix_select <- netflix %>%
+  select(-description)
+
+glimpse(netflix_select)
+
+# Changing "listed_in" column to "genre"
+colnames(netflix_select)
+colnames(netflix_select)[11] <- "genre"
+```
+
+### Checking for duplicates 
+
+```{r}
+# Checking for duplicates
+count(unique(netflix_select["show_id"]))
+count(unique(netflix_select["title"]))
+```
+Both variables contain 8,807 unique values which matches the number of rows in the data set. Thus, there aren't any duplicate observations.
+
+### Handling missing values
+
+```{r}
+# Number of missing values by column
+for(col in colnames(netflix_select)){
+  total_missing <- sum(netflix_select[col] == "")
+  cat(col, total_missing, "\n")
+}
+
+# Replacing missing values with NA
+netflix_na <- replace_with_na_all(netflix_select, condition = ~.x == "")
+
+# Checking that they were replaced successfully
+head(netflix_na)
+
+for(col in colnames(netflix_na)){
+  total_missing <- sum(is.na(netflix_na[col]))
+  cat(col, total_missing, "\n")
+}
+
+```
+All missing values have been replaced with `NA`. 
+
+### Updating elements
+```{r}
+# Confirming that there are only 2 types of media (Movie or TV Show)
+unique(netflix_na["type"])
+```
+Let's convert `date_added` from a character type to a date type.
+
+
+
+
+
+
+
