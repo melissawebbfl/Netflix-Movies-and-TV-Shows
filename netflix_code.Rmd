@@ -1,25 +1,30 @@
 ---
 title: "Netflix Movies and TV Shows"
+author: "Melissa Webb"
 output:
   html_document:
     df_print: paged
 ---
-# Introduction to the data 
+
+![](netflix_logo.png){width=350px}
+
+# Introduction to the data
+
 This data set consists of listings of all the movies and TV shows available on Netflix (a video streaming service) as of September 2021.  
 Here is a description of each of the columns in the data set:
 
-+ `show_id`: unique ID for every movie / show
++ `show_id`: unique ID for every movie/show
 + `type`: identifies if the row represents a movie or show
-+ `title`: title of the movie / show
-+ `director`: list of directors of the movie / show
-+ `cast`: list of actors in the movie / show
-+ `country`: countries where the movie / show was produced
-+ `date_added`: date the movie / show was added on Netflix
-+ `release_year`: year the movie / show was actually released
-+ `rating`: MPA rating of the movie / show
-+ `duration`: total duration in minutes of movies, or number of seasons for shows
-+ `listed_in`: list of genres the movie / show falls under
-+ `description`: summary description provided for the movie / show
++ `title`: title of the movie/show
++ `director`: list of directors of the movie/show
++ `cast`: list of actors in the movie/show
++ `country`: countries where the movie/show was produced
++ `date_added`: date the movie/show was added on Netflix
++ `release_year`: year the movie/show was actually released
++ `rating`: MPA rating of the movie/show
++ `duration`: total duration in minutes for movies, or number of seasons for shows
++ `listed_in`: list of genres the movie/show falls under
++ `description`: summary description provided for the movie/show
 
 ## Loading and previewing the data
 
@@ -27,37 +32,43 @@ Here is a description of each of the columns in the data set:
 library(tidyverse)
 library(naniar)
 
-netflix <- read.csv("netflix_titles.csv")
+nflx <- read.csv("netflix_titles.csv")
 ```
 
 ```{r}
-head(netflix, 10)
+head(nflx, 10)
 
-glimpse(netflix)
+dim(nflx)
 ```
-The data set contains 8,807 rows and 12 columns. By previewing the data we can see that there are some missing values that need to be updated. Also we will need to manipulate some of the columns to prepare them for data analysis. For example, the `date_added` variable can be converted from character data to dates. 
+The data set contains 8,807 rows and 12 columns. We will need to manipulate some of the columns to prepare them for data analysis.
 
 
-## Cleaning the data
-### Fixing columns
+## Data cleaning
+### Setting desired columns
 ```{r}
 # Dropping the description column
-netflix_select <- netflix %>%
+nflx_select <- nflx %>%
   select(-description)
-
-glimpse(netflix_select)
-
-# Changing "listed_in" column to "genre"
-colnames(netflix_select)
-colnames(netflix_select)[11] <- "genre"
 ```
+
+```{r, echo=FALSE, results='hide'}
+glimpse(nflx_select)
+```
+
+
+```{r}
+# Changing "listed_in" column to "genre"
+colnames(nflx_select)
+colnames(nflx_select)[11] <- "genre"
+```
+
 
 ### Checking for duplicates 
 
 ```{r}
 # Checking for duplicates
-count(unique(netflix_select["show_id"]))
-count(unique(netflix_select["title"]))
+count(unique(nflx_select["show_id"]))
+count(unique(nflx_select["title"]))
 ```
 Both variables contain 8,807 unique values which matches the number of rows in the data set. Thus, there aren't any duplicate observations.
 
@@ -65,35 +76,399 @@ Both variables contain 8,807 unique values which matches the number of rows in t
 
 ```{r}
 # Number of missing values by column
-for(col in colnames(netflix_select)){
-  total_missing <- sum(netflix_select[col] == "")
+for(col in colnames(nflx_select)){
+  total_missing <- sum(nflx_select[col] == "")
   cat(col, total_missing, "\n")
 }
 
 # Replacing missing values with NA
-netflix_na <- replace_with_na_all(netflix_select, condition = ~.x == "")
+nflx_na <- replace_with_na_all(nflx_select, condition = ~.x == "")
 
 # Checking that they were replaced successfully
-head(netflix_na)
+head(nflx_na, 10)
 
-for(col in colnames(netflix_na)){
-  total_missing <- sum(is.na(netflix_na[col]))
+for(col in colnames(nflx_na)){
+  total_missing <- sum(is.na(nflx_na[col]))
   cat(col, total_missing, "\n")
 }
 
 ```
 All missing values have been replaced with `NA`. 
 
-### Updating elements
+
 ```{r}
 # Confirming that there are only 2 types of media (Movie or TV Show)
-unique(netflix_na["type"])
+unique(nflx_na["type"])
 ```
+
+### Cleaning the `date_added` column
 Let's convert `date_added` from a character type to a date type.
+```{r}
+# Creating pattern that all `date_added` values should have
+pattern <- "^[A-Za-z]+\\s\\d+,\\s\\d+$"
+
+# Trimming whitespace from `date_added`
+nflx_trim <- nflx_na %>%
+  mutate(
+    date_added = str_trim(date_added, side = "both")
+  )
+
+# Making sure that all dates in `date_added` are formatted the same way: "Month day#, year#"
+nflx_trim %>%
+  filter(
+    !str_detect(date_added, pattern)
+  )
+```
+
+All dates are formatted the same way, so it's safe to convert them.
+
+```{r}
+# Creating new column with dates stored as date type
+nflx_date <- nflx_trim %>%
+  mutate(
+    date_added_as_date = as.Date(date_added, "%B %d, %Y")
+  )
+
+tail(select(nflx_date, date_added, date_added_as_date))
+
+# Dropping the old column, date_added
+colnames(nflx_date)
+
+nflx_date_drop <- select(nflx_date, -"date_added")
+
+colnames(nflx_date_drop)
+```
+### Cleaning the `rating` column
+Next, let's check out the `rating` column.
+```{r}
+unique(nflx_date_drop$rating)
+```
+We can see that values we would expect to be in the `duration` column (like "74 min") are in the `ratings` column, so that will need to be investigated. Also, `NR` (Not Rated) and `UR` (Unrated) have the same meaning, so we will convert all `UR` ratings to `NR` for consistency purposes. Lastly, `NA` ratings may be updated.
+
+```{r}
+# Taking a closer look at ratings that have a duration as their value
+nflx_date_drop %>%
+  select(show_id, title, type, rating, duration) %>%
+  filter(str_detect(rating, "min"))
+```
+Note that these are the only films in the data set that have a missing value for `duration`. This is an error that can be corrected by replacing the `NA` values in `duration` with their corresponding values found in `rating`. According to Netflix, all three films are rated TV-MA, so we will input that information too.
+
+```{r}
+# Replacing NA values
+nflx_duration <- nflx_date_drop
+
+nflx_duration$duration[is.na(nflx_duration$duration)] <- nflx_duration$rating[is.na(nflx_duration$duration)]
+
+nflx_duration %>%
+  select(show_id, title, type, rating, duration) %>%
+  filter(str_detect(rating, "min"))
+```
+
+The `NA` values in `duration` have been replaced successfully. Now, let's replace the ratings.
+
+```{r}
+# Storing show_id in preparation to replace corresponding ratings
+filtered_show_id <- deframe(
+  nflx_date_drop %>%
+  filter(str_detect(rating, "min")) %>%
+  select(show_id)
+)
+
+filtered_show_id
+
+# Replacing corresponding ratings with "TV-MA"
+nflx_duration_rating <- nflx_duration
+
+nflx_duration_rating$rating[nflx_duration_rating$show_id %in% filtered_show_id] <- "TV-MA"
+
+nflx_duration_rating %>%
+  select(show_id, title, type, rating, duration) %>%
+  filter(show_id %in% filtered_show_id) 
+```
+Now, we will convert all `UR` ratings to `NR`.
+
+```{r}
+# Identifying UR shows
+nflx_duration_rating %>%
+  select(show_id, title, type, rating) %>%
+  filter(rating == "UR")
+
+nflx_rating <- nflx_duration_rating
+
+# Converting ratings
+nflx_rating$rating[nflx_rating$rating == "UR"] <- "NR"
+
+nflx_rating %>%
+  select(show_id, title, type, rating) %>%
+  filter(show_id %in% c("s7059", "s7989", "s8791"))
+```
+
+The last step for this column is to investigate `NA` ratings.
+```{r}
+nflx_rating %>%
+  select(show_id, title, type, rating) %>%
+  filter(is.na(rating))
+```
+Four titles have `NA` ratings. We will replace their missing values for `rating` according to the ratings provided on [Netflix](https://www.netflix.com/browse) and [IMDB](https://www.imdb.com/).
+
+```{r}
+nflx_rating_na <- nflx_rating
+
+nflx_rating_na$rating[is.na(nflx_rating_na$rating)] <- c("TV-PG", "TV-14", "TV-MA", "PG-13")
+
+nflx_rating_na %>%
+  select(show_id, title, type, rating) %>%
+  filter(show_id %in% c("s5990","s6828","s7313","s7538"))
+```
 
 
+### Cleaning the `duration` column
+```{r}
+head(select(nflx_rating_na, type, duration), 10)
+```
+The `duration` variable is counted in minutes for movies and by seasons for TV shows, so we will copy the values of `duration` into two separate columns (`movie_length` and `season_total`) to distinguish the two types of `duration`.
+
+```{r}
+# Creating two new columns
+nflx_sep_durations <- nflx_rating_na %>%
+  mutate(
+    season_total = if_else(str_detect(duration, "Season"), as.integer(parse_number(duration)), NA_integer_),
+    movie_length = if_else(str_detect(duration, "min"), as.integer(parse_number(duration)), NA_integer_)
+  )
+
+# Checking that the columns were created successfully
+nflx_sep_durations %>%
+  select(type, duration, season_total, movie_length)
+
+# Dropping the original column
+nflx_clean <- select(nflx_sep_durations, -duration)
+
+colnames(nflx_clean)
+
+```
+
+## Data visualization
+
+### Number of movies vs TV shows
+```{r}
+content_type <- count(nflx_clean, type)
+
+content_type
+
+```
+We can see that the majority of content available on Netflix are movies.
+
+```{r}
+# Visualizing Netflix content via pie chart
+content_type %>%
+  ggplot(aes(x = "", y = n, fill = type)) +
+  geom_bar(stat = "identity") +
+  coord_polar(theta = "y") +
+  labs(
+    title = "Content on Netflix",
+    fill = "Type"
+    ) +
+  geom_text(
+    aes(label = paste0(n," (",scales::percent(n / sum(n)),")")),
+    position = position_stack(vjust = 0.5),
+    color = "white"
+    ) +
+  theme_void() +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_fill_manual(
+    breaks = c("Movie", "TV Show"), 
+    values=c("#E50914", "black")
+    ) 
+```
+
+Roughly 70% of the content available on Netflix are movies.
+
+### Countries where content on Netflix is produced
+Let's identify the top 10 countries where content available on Netflix is produced.
+```{r}
+# Extracting column of interest, "country"
+countries <- nflx_clean["country"]
+
+glimpse(countries)
+
+# Drop rows where country is NA
+countries <- drop_na(countries)
+```
+Some rows contain more than one country. We will need to manipulate the data frame so that each row contains only one country. This will be accomplished by creating a new column.
+
+```{r}
+# Separating countries into individual rows in new column, country_2
+countries_split <- countries %>%
+  mutate(country_2 = strsplit(country, ",")) %>%
+  unnest(country_2) %>%
+  mutate(country_2 = str_trim(country_2))
+
+head(countries_split, 10)
+
+# Dropping old column, country
+countries_split_clean <- countries_split %>%
+  select(country_2) %>%
+  rename(country = country_2)
+
+```
+
+```{r, echo = FALSE, results = "hide"}
+head(countries_split_clean, 10)
+
+```
 
 
+```{r}
+# Getting number of movies/shows produced in each country
+country_count <- count(countries_split_clean, country)
 
+tail(country_count)
+```
 
+Now, let's identify the top 10 countries.
+```{r}
+# Arranging countries by number and keeping the top 10
+country_top_10 <- arrange(country_count, -n) %>% head(10)
 
+country_top_10
+```
+
+```{r}
+# Bar chart for top 10 countries
+country_top_10 %>% 
+  ggplot(aes(x = reorder(country, +n), y = n)) +
+  geom_col(aes(fill = n)) +
+  coord_flip() +
+  scale_fill_gradient2(low='white', mid='#E50914', high='black') +
+  labs(
+    title = "Top 10 Countries Where Content on Netflix is Produced",
+    x = "Country",
+    y = "Number of Movies and TV Shows"
+  ) +
+  geom_text(aes(label = n), nudge_y = 200)
+```
+
+We can see that the United States takes the top position with 3,690 movies/TV shows. Mexico takes the tenth spot with 169 shows.
+
+### Tracking shows added by date
+Let's observe the rate at which Netflix has expanded its catalog throughout the years.
+```{r}
+# Extracting date added
+date_added <- drop_na(nflx_clean["date_added_as_date"])
+```
+
+```{r, echo = FALSE, results = "hide"}
+glimpse(date_added)
+``` 
+
+We only need the year each title was added to Netflix, so we will extract that information from the `date_added_as_date` column and calculate the number of titles added each year.
+
+```{r}
+# Creating new column containing year only
+date_year_added <- date_added %>%
+  rename(date = date_added_as_date) %>%
+  mutate(year = format(date, "%Y"))
+
+head(date_year_added)
+
+# df containing number of movies/shows added to Netflix each year
+year_count <- count(date_year_added, year)
+
+year_count
+
+```
+
+The number of titles released generally appear to be increasing from year-to-year. Let's visualize the data to make this clearer.
+
+```{r}
+# Line graph of number of movies/shows added each year
+year_count %>% 
+  ggplot(aes(x = year, y = n, group = 1)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Number of Movies and TV Shows Added to Netflix",
+    x = "Year",
+    y = "Number of Movies and TV Shows"
+  ) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+In 2017, we see more than double the amount of content added compared to 2016. This may be partly attributed to Netflix releasing more original content in 2017. We also observe an upward trend from 2013 to 2019, and then a slight decrease in 2020 which we can speculate is due to the COVID-19 pandemic which halted production of movies and TV shows that year. It will be interesting to see how much content is added to the streaming service in 2022.
+
+### Identifying the target audience
+We will look at the ratings that are most popular on Netflix.
+```{r}
+# Getting and arranging ratings by number of occurrences
+rating_count <- count(nflx_clean, rating)
+
+arrange(rating_count, -n)
+
+# Bar chart for ratings
+rating_count %>% 
+  ggplot(aes(x = reorder(rating, +n), y = n)) +
+  geom_col(aes(fill = n)) +
+  coord_flip()+
+  scale_fill_gradient2(low='white', mid='red', high='black') +
+  labs(
+    title = "Netflix Content Ratings",
+    x = "Rating",
+    y = "Number of Movies and TV Shows"
+  ) +
+  geom_text(aes(label = n), nudge_y = 200) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+The most popular rating is TV-MA which signifies content that is for mature audiences. This suggests that Netflix primarily caters to adult users.
+
+We can take a more general look at the type of content available on Netflix by placing each rating into one of the following broad categories:  
+
+- Kid (TV-Y, TV-Y7, TV-Y7-FV, TV-G, G)
+- Teen (TV-PG, TV-14, PG, PG-13)
+- Adult (TV-MA, NC-17, R)
+
+```{r}
+# Categorizing ratings
+rating_count_category <- rating_count %>%
+  filter(rating != "NR") %>%
+  mutate(
+    category = case_when(str_detect(rating, "PG|TV-14") ~ "Teen",
+                         str_detect(rating, "Y|TV-G|G") ~ "Kid",
+                         TRUE ~ "Adult")
+  )
+
+rating_count_category
+
+# Grouping ratings by category and calculating sum
+rating_category <- rating_count_category %>%
+  group_by(category) %>%
+  summarize(
+    total = sum(n)
+  )
+
+rating_category
+```
+```{r}
+# Visualizing ratings via pie chart
+rating_category %>%
+  ggplot(aes(x = "", y = total, fill = category)) +
+  geom_bar(stat = "identity") +
+  coord_polar(theta = "y") +
+  theme_void() +
+  labs(
+    title = "Audience Netflix's Content Caters To",
+    fill = "Audience"
+    ) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(
+    breaks = c("Adult", "Kid", "Teen"),
+    values=c("black", "gray", "#E50914")
+    ) +
+  geom_text(
+    aes(label = scales::percent(total / sum(total))),
+    position = position_stack(vjust = 0.5),
+    color = "white"
+    )
+```
+
+The visualization above supports the idea that Netflix's target audience is adults since the majority of their content isn't suitable for kids or teens.
