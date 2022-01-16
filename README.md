@@ -8,7 +8,7 @@
 ## Introduction
 <img src="https://cdn.pixabay.com/photo/2020/06/24/11/51/laptop-5335884_1280.jpg" width="320" height="256">  
 
-This project involves data cleaning and EDA of a [Kaggle data set](https://www.kaggle.com/shivamb/netflix-shows) containing movies and TV shows available on Netflix.  
+This project involves data cleaning and visualization of a [Kaggle data set](https://www.kaggle.com/shivamb/netflix-shows) containing movies and TV shows available on Netflix.  
 
 Here is a description of each of the original columns in the data set:
 
@@ -33,7 +33,7 @@ I made the following changes to clean the data set:
 * Made new columns for `duration` based on `type`
 
 
-## EDA
+## Data Visualization
 I created a few visualizations to summarize the data. Below are two of them.  
 
 <img src="https://github.com/melissawebbfl/Netflix/blob/aae9756cb05e4360c70f00f4a19824c740379a87/top_10_countries.png" width="600" height="440">
