@@ -1,7 +1,7 @@
 # Netflix Movies and TV Shows: Project Overview
 
 ## Quick Links
-* [R code](https://github.com/melissawebbfl/Netflix/blob/main/netflix_code.Rmd)
+* [Project](https://htmlpreview.github.io/?https://github.com/melissawebbfl/Netflix-Movies-and-TV-Shows/blob/main/netflix_code.html)
 * [Original data set](https://github.com/melissawebbfl/Netflix/blob/main/netflix_titles.csv)
 * [Clean data set](https://github.com/melissawebbfl/Netflix/blob/main/netflix_titles_clean.csv)
 
